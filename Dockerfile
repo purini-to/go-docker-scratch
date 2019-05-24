@@ -5,15 +5,13 @@
 ###############################
 FROM golang:1.12.5-alpine as builder
 
+# Ca-certificates is required to call HTTPS endpoints.
 RUN \
     --mount=type=cache,target=/var/cache/apk \
-    apk --update add upx shadow tzdata
+    apk --update add upx tzdata ca-certificates &&\
+    update-ca-certificates
 
-RUN groupadd -r app && useradd --no-log-init -r -g app app
-
-ENV GOOS=linux
-ENV GOARCH=amd64
-ENV GO111MODULE=auto
+RUN adduser -D -g '' appuser
 
 ENV APP_DIR /app
 RUN mkdir -p $APP_DIR
@@ -24,7 +22,7 @@ RUN \
     --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
     --mount=type=bind,target=. \
-    CGO_ENABLED=0 go build -ldflags '-d -w -s' -o /bin/app &&\
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -a -installsuffix cgo -o /bin/app &&\
     upx /bin/app
 
 
@@ -49,7 +47,7 @@ COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 
 COPY --from=builder /bin/app $APP_DIR/
 
-USER app
+USER appuser
 
 EXPOSE 3000
 
